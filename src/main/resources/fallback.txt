@@ -1,0 +1,12 @@
+# 자동 재생 목록. DATA_DIR/fallback.txt 가 있으면 그 파일이 우선한다.
+#   [카테고리]          섹션 (없으면 "기본")
+#   https://youtu.be/…  영상 하나 (키 불필요)
+#   playlist:ID         재생목록 최대 200곡 (키 필요)
+#   search:검색어        검색 결과 50곡 (키 필요, 24시간 캐시)
+#   chart:KR            그 나라 인기 음악 50곡 (키 필요)
+
+[인기]
+chart:KR
+
+[집중]
+search:lofi hip hop beats to study
