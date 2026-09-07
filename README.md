@@ -52,20 +52,29 @@ SPRING_PROFILES_ACTIVE=local ./gradlew bootRun
 ./gradlew bootJar     # build/libs/wannassong-0.0.1-SNAPSHOT.jar
 
 SPRING_PROFILES_ACTIVE=dev \
-CONTEXT_PATH=/jukebox \
-SOCKETIO_CONTEXT=/jukebox/socket.io \
 PUBLIC_PORT=443 \
 YT_API_KEY=AIza... \
 java -jar build/libs/wannassong-0.0.1-SNAPSHOT.jar
 ```
 
-`CONTEXT_PATH` 를 주면 REST 가 `/jukebox/api/*` 로 내려가고, 루트 `/api/*` 는 404 가 된다.
-socket.io 는 별 리스너라 `SOCKETIO_CONTEXT` 를 같이 맞춰야 클라이언트 경로가 일치한다.
+## 경로
+
+context path 는 `/wannassong` 이 기본값이다. 루트 `/api/*` 는 404.
+
+| | 경로 |
+|---|---|
+| REST | `http://<host>:3001/wannassong/api/*` |
+| Socket.IO | `http://<host>:3002/wannassong/socket.io/` |
+| Swagger | `http://<host>:3001/wannassong/swagger-ui.html` |
+
+`CONTEXT_PATH` 로 바꿀 수 있다. 빈 값(`CONTEXT_PATH=`)이면 루트에서 서비스한다.
+바꿀 때는 `SOCKETIO_CONTEXT` 도 같이 맞춰야 클라이언트 경로가 일치한다 —
+socket.io 는 별 리스너라 context path 를 자동으로 물려받지 않는다.
 `PUBLIC_PORT` 는 `/api/info` 의 `lanUrls`·`port` 에만 쓰인다 (프록시 앞단 포트).
 
-> Windows Git Bash 에서 `CONTEXT_PATH=/jukebox java -jar ...` 로 띄우면 MSYS 가 값을
+> Windows Git Bash 에서 `CONTEXT_PATH=/foo java -jar ...` 로 띄우면 MSYS 가 값을
 > Windows 경로로 바꿔 `ContextPath must start with '/'` 로 죽는다. PowerShell·cmd 를 쓰거나
-> `--server.servlet.context-path=/jukebox` 를 프로그램 인자로 넘길 것. Linux 서버에선 문제없다.
+> `--server.servlet.context-path=/foo` 를 프로그램 인자로 넘길 것. Linux 서버에선 문제없다.
 
 Redis 에 못 붙으면 서비스는 뜨지만 상태가 하나도 남지 않는다. 기동 로그에
 `Redis 에 붙지 못했다` ERROR 가 찍히니 확인할 것.
@@ -78,9 +87,9 @@ Redis 에 못 붙으면 서비스는 뜨지만 상태가 하나도 남지 않는
 |------|------|------|
 | `SPRING_PROFILES_ACTIVE` | `dev` | `dev` \| `local` |
 | `PORT` | `3001` | REST 리슨 포트 |
-| `CONTEXT_PATH` | — (루트) | 예: `/jukebox` → `/jukebox/api/*` |
+| `CONTEXT_PATH` | `/wannassong` | 빈 값이면 루트. `SOCKETIO_CONTEXT` 도 같이 맞출 것 |
 | `SOCKETIO_PORT` | `3002` | Socket.IO 리슨 포트 |
-| `SOCKETIO_CONTEXT` | `/socket.io` | `CONTEXT_PATH` 쓰면 같이 맞출 것 |
+| `SOCKETIO_CONTEXT` | `/wannassong/socket.io` | socket.io 는 context path 를 자동 상속하지 않는다 |
 | `PUBLIC_PORT` | `PORT` 값 | `/api/info` 의 `lanUrls`·`port`. 프록시 앞단 포트 |
 | `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` | `localhost` / `6379` / — | `local` 프로파일에서만 |
 | `ALLOWED_ORIGINS` | `*` (local 은 `http://localhost:3000`) | 쉼표 구분. 프론트 공개 URL |
@@ -98,34 +107,94 @@ Redis 에 못 붙으면 서비스는 뜨지만 상태가 하나도 남지 않는
 
 ## Swagger
 
-기동 후 `http://localhost:3001/swagger-ui.html` (OpenAPI JSON 은 `/v3/api-docs`).
+기동 후 `http://localhost:3001/wannassong/swagger-ui.html`
+(OpenAPI JSON 은 `/wannassong/v3/api-docs`).
 
 REST 5개만 나온다. 대기열·재생·스피커는 Socket.IO 이벤트라 OpenAPI 로 표현되지 않는다 —
 `identify`, `request`, `remove`, `speaker:claim/tick/ended/error/skip/release`, `fallback:set`,
 `feedback` → `state`, `tick`, `me`. 계약은 이 문서와 `backend-onprem-handoff.md` 참고.
 
-nginx 는 `/api/*` 와 `/socket.io/*` 만 프록시하므로 Swagger 는 외부에 노출되지 않는다.
-서버 포트로 직접 접속해야 한다. 외부에 열려면 `location /swagger-ui/`, `location /v3/api-docs`
-를 추가할 것.
-
-`CONTEXT_PATH` 를 쓰면 경로도 그 아래로 내려간다 (`/jukebox/swagger-ui.html`).
+아래 nginx 설정은 `/wannassong/api/` 와 `/wannassong/socket.io/` 만 프록시하므로 Swagger 는
+외부에 노출되지 않는다. 서버 포트로 직접 접속해야 한다. 외부에 열려면
+`location /wannassong/swagger-ui/` 와 `location /wannassong/v3/api-docs` 를 추가할 것.
 
 ## 리버스 프록시
 
 netty-socketio 는 Tomcat 포트를 공유할 수 없어 리스너가 둘이다. 같은 공개 도메인으로 묶는다.
 
+`http` 블록에 (`server` 안이 아니다):
+
 ```nginx
-location /            { proxy_pass http://127.0.0.1:3000; }   # Next.js UI
-location /api/        { proxy_pass http://127.0.0.1:3001; }   # CONTEXT_PATH 쓰면 location 도 맞출 것
-location /socket.io/  {
-    proxy_pass http://127.0.0.1:3002;
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection "upgrade";
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
 }
 ```
 
-`X-Forwarded-For` 를 넘겨야 REST 레이트 리밋이 진짜 클라이언트 IP 로 걸린다.
+`server` 블록에:
+
+```nginx
+# Next.js UI
+location / {
+    proxy_pass http://127.0.0.1:3000;
+    proxy_set_header Host              $host;
+    proxy_set_header X-Real-IP         $remote_addr;
+    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+
+# REST
+location /wannassong/api/ {
+    proxy_pass http://127.0.0.1:3001;
+    proxy_set_header Host              $host;
+    proxy_set_header X-Real-IP         $remote_addr;
+    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+
+# Socket.IO — WebSocket upgrade 필수
+location /wannassong/socket.io/ {
+    proxy_pass http://127.0.0.1:3002;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade    $http_upgrade;
+    proxy_set_header Connection $connection_upgrade;
+
+    proxy_set_header Host              $host;
+    proxy_set_header Origin            $http_origin;
+    proxy_set_header X-Real-IP         $remote_addr;
+    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+
+    # 연결이 오래 열려 있다. 기본 60s 면 유휴 소켓이 끊긴다 (pingTimeout 60s, pingInterval 25s).
+    proxy_read_timeout  3600s;
+    proxy_send_timeout  3600s;
+    proxy_buffering     off;   # long-polling 응답이 버퍼에 갇히지 않게
+}
+```
+
+세 가지가 각각 없으면 이렇게 깨진다:
+
+| 빠뜨린 것 | 증상 |
+|---|---|
+| `Upgrade` / `Connection` 헤더 | websocket 업그레이드 실패. polling 으로만 붙어 `tick` 이 느려짐 |
+| `proxy_read_timeout` 상향 | 60초마다 소켓 끊김 → 재연결 반복, 스피커가 계속 release 됨 |
+| `X-Forwarded-For` | REST 레이트 리밋이 nginx IP 하나로 뭉쳐서 전원이 429 |
+
+`proxy_pass` 뒤에 슬래시를 붙이지 말 것. 붙이면 URI 가 잘려 `/wannassong/socket.io` 경로가
+안 맞는다 (`SOCKETIO_CONTEXT` 와 일치해야 한다).
+
+동작 확인:
+
+```bash
+curl -s "https://<도메인>/wannassong/socket.io/?EIO=4&transport=polling"
+# 0{"sid":"...","upgrades":["websocket"],"pingInterval":25000,"pingTimeout":60000}
+
+curl -i -s -o /dev/null -w '%{http_code}\n' \
+  -H 'Connection: Upgrade' -H 'Upgrade: websocket' \
+  -H 'Sec-WebSocket-Version: 13' -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' \
+  "https://<도메인>/wannassong/socket.io/?EIO=4&transport=websocket"
+# 101 이어야 한다. 200/400 이면 upgrade 설정이 안 먹은 것
+```
 
 ## Redis 키
 

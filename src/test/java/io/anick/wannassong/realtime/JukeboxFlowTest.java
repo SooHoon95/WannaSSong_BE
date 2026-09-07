@@ -42,7 +42,9 @@ class JukeboxFlowTest {
 
 	@BeforeEach
 	void connect() throws Exception {
-		socket = IO.socket("http://localhost:39311");
+		// socketio.context 기본값과 같아야 붙는다. 프론트도 이 path 를 쓴다.
+		socket = IO.socket("http://localhost:39311",
+				IO.Options.builder().setPath("/wannassong/socket.io").build());
 		CompletableFuture<Void> connected = new CompletableFuture<>();
 		socket.on(Socket.EVENT_CONNECT, args -> connected.complete(null));
 		socket.on("state", args -> states.add(firstObject(args)));
