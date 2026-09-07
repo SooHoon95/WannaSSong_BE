@@ -17,6 +17,9 @@ import io.anick.wannassong.realtime.RateLimiter;
 import io.anick.wannassong.youtube.ItunesClient;
 import io.anick.wannassong.youtube.YouTubeClient;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+
 import jakarta.servlet.http.HttpServletRequest;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -33,6 +36,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /** 스펙 §2 REST. 검색·건의조회·헬스는 전부 여기, 소켓에는 없다. */
+@Tag(name = "WannaSSong REST", description = "검색·건의조회·헬스. 대기열·재생은 Socket.IO 라 여기 없다.")
 @Slf4j
 @RestController
 @RequiredArgsConstructor
@@ -64,6 +68,7 @@ public class ApiController {
 	// ---------- 검색 ----------
 
 	/** iTunes 후보 (무료·무제한). 40/min/IP. */
+	@Operation(summary = "iTunes 곡 후보 검색", description = "q 는 trim 후 최대 100자. 빈 문자열이면 results 는 빈 배열. KR 스토어가 0건이면 US 로 재시도. 40회/분/IP.")
 	@PostMapping("/api/suggest")
 	public Map<String, Object> suggest(@RequestBody(required = false) Query body, HttpServletRequest req) {
 		limit(req, "suggest", 40, 60_000);
@@ -72,6 +77,7 @@ public class ApiController {
 	}
 
 	/** YouTube 직접 검색 (100유닛/회라 빡빡하게). 5/min/IP. */
+	@Operation(summary = "YouTube 영상 검색", description = "videoCategoryId=10, videoEmbeddable=true, 최대 5건. YT_API_KEY 없으면 NO_API_KEY. 5회/분/IP.")
 	@PostMapping("/api/ytsearch")
 	public Map<String, Object> ytsearch(@RequestBody(required = false) Query body, HttpServletRequest req) {
 		limit(req, "ytsearch", 5, 60_000);
@@ -85,11 +91,13 @@ public class ApiController {
 
 	// ---------- 운영 ----------
 
+	@Operation(summary = "헬스 체크", description = "speakerOnline 은 스피커 소켓이 살아 있는지.")
 	@GetMapping("/api/health")
 	public Map<String, Object> health() {
 		return Map.of("ok", true, "speakerOnline", jukebox.speakerOnline());
 	}
 
+	@Operation(summary = "QR·공유용 서버 정보", description = "lanUrls 와 port 는 PUBLIC_PORT(없으면 server.port) 기준.")
 	@GetMapping("/api/info")
 	public Map<String, Object> info() {
 		Map<String, Object> out = new LinkedHashMap<>();
@@ -101,6 +109,7 @@ public class ApiController {
 	}
 
 	/** SPEAKER_KEY 가 설정돼 있으면 ?key= 가 맞아야 볼 수 있다. clientId 는 노출하지 않는다. */
+	@Operation(summary = "건의사항 목록", description = "SPEAKER_KEY 가 설정돼 있으면 key 가 일치해야 한다. 응답에 clientId 는 없다.")
 	@GetMapping("/api/feedback")
 	public ResponseEntity<Object> feedback(@RequestParam(required = false) String key) {
 		if (!props.getSpeakerKey().isBlank() && !props.getSpeakerKey().equals(key)) {

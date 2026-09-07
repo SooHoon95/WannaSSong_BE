@@ -96,6 +96,20 @@ Redis 에 못 붙으면 서비스는 뜨지만 상태가 하나도 남지 않는
 
 전부 **기동 시 1회** 읽는다. 바꾸려면 재시작.
 
+## Swagger
+
+기동 후 `http://localhost:3001/swagger-ui.html` (OpenAPI JSON 은 `/v3/api-docs`).
+
+REST 5개만 나온다. 대기열·재생·스피커는 Socket.IO 이벤트라 OpenAPI 로 표현되지 않는다 —
+`identify`, `request`, `remove`, `speaker:claim/tick/ended/error/skip/release`, `fallback:set`,
+`feedback` → `state`, `tick`, `me`. 계약은 이 문서와 `backend-onprem-handoff.md` 참고.
+
+nginx 는 `/api/*` 와 `/socket.io/*` 만 프록시하므로 Swagger 는 외부에 노출되지 않는다.
+서버 포트로 직접 접속해야 한다. 외부에 열려면 `location /swagger-ui/`, `location /v3/api-docs`
+를 추가할 것.
+
+`CONTEXT_PATH` 를 쓰면 경로도 그 아래로 내려간다 (`/jukebox/swagger-ui.html`).
+
 ## 리버스 프록시
 
 netty-socketio 는 Tomcat 포트를 공유할 수 없어 리스너가 둘이다. 같은 공개 도메인으로 묶는다.
