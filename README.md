@@ -14,6 +14,14 @@ WannaSSong 온프레미스 백엔드. REST + Socket.IO + Redis + 폴백 로드�
 
 공통 설정은 `application.properties`. 클러스터는 `SELECT` 를 지원하지 않아 DB 인덱스 분리가 안 되고, `wannasong:` 키 프리픽스로만 구분한다.
 
+로컬에 Redis 를 안 띄울 거면 `dev` 프로파일을 쓴다. IntelliJ 는
+Run → Edit Configurations → **Active profiles** 에 `dev`. 안 넣으면 `local` 로 떠서
+`Unable to connect to Redis` 가 난다.
+
+> **`.properties` 는 ASCII 만 쓴다.** Spring 은 `.properties` 를 ISO-8859-1 로 읽는다
+> (`java.util.Properties` 스펙). 한글을 넣으면 `# ê°ë° ìë²` 처럼 깨진다.
+> 한글이 필요하면 `fallback.txt`(UTF-8) 에 두거나 `\uXXXX` 로 이스케이프할 것.
+
 ## 시크릿
 
 `YT_API_KEY`, `ACCESS_CODE`, `SPEAKER_KEY` 는 커밋하지 않는다. 둘 중 하나로 넣는다.
