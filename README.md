@@ -120,80 +120,78 @@ REST 5개만 나온다. 대기열·재생·스피커는 Socket.IO 이벤트라 O
 
 ## 리버스 프록시
 
-netty-socketio 는 Tomcat 포트를 공유할 수 없어 리스너가 둘이다. 같은 공개 도메인으로 묶는다.
-
-`http` 블록에 (`server` 안이 아니다):
+netty-socketio 는 Tomcat 포트를 공유할 수 없어 리스너가 둘이다. 다른 서비스처럼 upstream
+하나로는 안 되고 **둘** 이 필요하다.
 
 ```nginx
-map $http_upgrade $connection_upgrade {
-    default upgrade;
-    ''      close;
-}
+upstream afin_wannassong    { server 127.0.0.1:3001; }   # REST + Swagger
+upstream afin_wannassong_ws { server 127.0.0.1:3002; }   # Socket.IO
 ```
 
 `server` 블록에:
 
 ```nginx
-# Next.js UI
-location / {
-    proxy_pass http://127.0.0.1:3000;
-    proxy_set_header Host              $host;
-    proxy_set_header X-Real-IP         $remote_addr;
-    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-}
+        location /wannassong/socket.io/ {
+          proxy_pass http://afin_wannassong_ws;
+          proxy_http_version 1.1;
+          proxy_set_header Upgrade $http_upgrade;
+          proxy_set_header Connection "upgrade";
+          proxy_set_header Host $http_host;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header X-Real-IP $remote_addr;
+          proxy_read_timeout 86400;
+          proxy_send_timeout 86400;
+          proxy_buffering off;
+        }
 
-# REST
-location /wannassong/api/ {
-    proxy_pass http://127.0.0.1:3001;
-    proxy_set_header Host              $host;
-    proxy_set_header X-Real-IP         $remote_addr;
-    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-}
-
-# Socket.IO — WebSocket upgrade 필수
-location /wannassong/socket.io/ {
-    proxy_pass http://127.0.0.1:3002;
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade    $http_upgrade;
-    proxy_set_header Connection $connection_upgrade;
-
-    proxy_set_header Host              $host;
-    proxy_set_header Origin            $http_origin;
-    proxy_set_header X-Real-IP         $remote_addr;
-    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-
-    # 연결이 오래 열려 있다. 기본 60s 면 유휴 소켓이 끊긴다 (pingTimeout 60s, pingInterval 25s).
-    proxy_read_timeout  3600s;
-    proxy_send_timeout  3600s;
-    proxy_buffering     off;   # long-polling 응답이 버퍼에 갇히지 않게
-}
+        location /wannassong {
+                proxy_pass http://afin_wannassong;
+                proxy_set_header Host $http_host;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Real-IP $remote_addr;
+        }
 ```
 
-세 가지가 각각 없으면 이렇게 깨진다:
+location 순서는 무관하다. nginx 는 prefix location 중 가장 긴 것을 고르므로
+`/wannassong/socket.io/...` 는 위 블록이 이긴다.
+
+빠뜨리면 이렇게 깨진다:
 
 | 빠뜨린 것 | 증상 |
 |---|---|
+| socket.io 를 3001 upstream 으로 | 404. REST 포트에는 socket.io 가 없다 |
 | `Upgrade` / `Connection` 헤더 | websocket 업그레이드 실패. polling 으로만 붙어 `tick` 이 느려짐 |
-| `proxy_read_timeout` 상향 | 60초마다 소켓 끊김 → 재연결 반복, 스피커가 계속 release 됨 |
+| `proxy_read_timeout` 상향 | 기본 60s 라 유휴 소켓이 끊김 → 재연결 반복, 스피커가 계속 release 됨 |
 | `X-Forwarded-For` | REST 레이트 리밋이 nginx IP 하나로 뭉쳐서 전원이 429 |
+| `proxy_pass` 뒤 슬래시 | URI 가 잘려 `SOCKETIO_CONTEXT` 와 경로가 안 맞는다 |
 
-`proxy_pass` 뒤에 슬래시를 붙이지 말 것. 붙이면 URI 가 잘려 `/wannassong/socket.io` 경로가
-안 맞는다 (`SOCKETIO_CONTEXT` 와 일치해야 한다).
+`Connection "upgrade"` 리터럴은 polling 요청에도 헤더가 붙지만 netty-socketio 가 무시한다.
+`map $http_upgrade $connection_upgrade` 를 쓰려면 그 `map` 은 `http` 컨텍스트에 있어야 한다
+(`conf.d/*.conf` 는 이미 `http` 안이므로 `server` 블록 밖, 파일 맨 위). 정의 없이 변수를 쓰면
+`nginx: [emerg] unknown "connection_upgrade" variable` 로 죽는다.
 
 동작 확인:
 
 ```bash
+sudo nginx -t && sudo nginx -s reload
+
+curl -s "https://<도메인>/wannassong/api/health"
+# {"ok":true,"speakerOnline":false}
+
 curl -s "https://<도메인>/wannassong/socket.io/?EIO=4&transport=polling"
 # 0{"sid":"...","upgrades":["websocket"],"pingInterval":25000,"pingTimeout":60000}
 
-curl -i -s -o /dev/null -w '%{http_code}\n' \
+curl -s -o /dev/null -w '%{http_code}\n' \
   -H 'Connection: Upgrade' -H 'Upgrade: websocket' \
   -H 'Sec-WebSocket-Version: 13' -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' \
   "https://<도메인>/wannassong/socket.io/?EIO=4&transport=websocket"
-# 101 이어야 한다. 200/400 이면 upgrade 설정이 안 먹은 것
+# 101 이어야 한다. 200/400 이면 upgrade 설정이 안 먹은 것, 404 면 upstream 포트가 틀린 것
+```
+
+프론트 socket.io-client 는 `path` 를 맞춰야 한다:
+
+```js
+io('https://<도메인>', { path: '/wannassong/socket.io' })
 ```
 
 ## Redis 키
