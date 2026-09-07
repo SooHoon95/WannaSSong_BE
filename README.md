@@ -50,12 +50,46 @@ SPRING_PROFILES_ACTIVE=local ./gradlew bootRun
 
 ```bash
 ./gradlew bootJar     # build/libs/wannassong-0.0.1-SNAPSHOT.jar
-
-SPRING_PROFILES_ACTIVE=dev \
-PUBLIC_PORT=443 \
-YT_API_KEY=AIza... \
-java -jar build/libs/wannassong-0.0.1-SNAPSHOT.jar
 ```
+
+서버 배치:
+
+```
+<앱 디렉토리>/
+├── wannassong-api.jar                 # bootJar 산출물을 이 이름으로
+├── wannassong-api.sh                  # deploy/wannassong-api.sh
+├── config/application.properties      # 시크릿. deploy/config-application.properties.example 참고
+└── output.log
+```
+
+`./wannassong-api.sh` 하나로 뜬다. **프로세스는 하나**고 그 안에서 두 포트를 리슨한다
+(REST 19060, Socket.IO 19061). `java -jar` 를 두 번 실행하면 안 된다.
+
+```
+Tomcat started on port 19060 (http) with context path '/wannassong'
+socket.io listening on 0.0.0.0:19061/wannassong/socket.io
+```
+
+스크립트가 `kill -9` 대신 SIGTERM 으로 내리는 이유: `@PreDestroy` 가 돌아야 300ms 디바운스
+대기 중인 대기열 변경이 Redis 에 저장된다. 15초 안에 안 죽으면 `kill -9` 로 넘어간다.
+
+`output.log` 는 로테이션이 없다. 하루에 수십 MB 씩 쌓이므로 logrotate 를 걸어 둔다
+(`/etc/logrotate.d/wannassong-api`):
+
+```
+/home/<user>/wannassong-api/output.log {
+    daily
+    rotate 14
+    compress
+    missingok
+    notifempty
+    copytruncate
+}
+```
+
+`copytruncate` 라야 재시작 없이 잘린다 (앱이 파일 핸들을 계속 쥐고 있다).
+앱이 직접 파일로 쓰게 하려면 `logging.file.name` 을 주면 되지만, stdout 도 그대로 나가서
+같은 내용이 두 곳에 쌓인다.
 
 ## 경로
 

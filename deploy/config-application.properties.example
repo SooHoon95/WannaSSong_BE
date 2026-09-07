@@ -1,0 +1,15 @@
+# 서버의 <앱 디렉토리>/config/application.properties 로 복사한다.
+# Spring Boot 가 ./config/ 를 기본 설정 위치로 읽는다 (jar 안 클래스패스보다 우선).
+# ASCII 만 쓸 것 (.properties 는 ISO-8859-1 로 읽힌다).
+wannasong.yt-api-key=AIza...
+
+# QR/공유 UI 가 쓰는 외부 주소. 프록시 앞단 기준으로 넣는다.
+wannasong.public-url=https://dev.example.com/wannassong
+wannasong.public-port=443
+
+# 프론트 공개 origin. 쉼표로 여러 개.
+wannasong.allowed-origins=https://dev.example.com
+
+# 필요하면
+#wannasong.access-code=
+#wannasong.speaker-key=
