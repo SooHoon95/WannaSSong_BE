@@ -63,9 +63,9 @@ context path 는 `/wannassong` 이 기본값이다. 루트 `/api/*` 는 404.
 
 | | 경로 |
 |---|---|
-| REST | `http://<host>:3001/wannassong/api/*` |
-| Socket.IO | `http://<host>:3002/wannassong/socket.io/` |
-| Swagger | `http://<host>:3001/wannassong/swagger-ui.html` |
+| REST | `http://<host>:19060/wannassong/api/*` |
+| Socket.IO | `http://<host>:19061/wannassong/socket.io/` |
+| Swagger | `http://<host>:19060/wannassong/swagger-ui.html` |
 
 `CONTEXT_PATH` 로 바꿀 수 있다. 빈 값(`CONTEXT_PATH=`)이면 루트에서 서비스한다.
 바꿀 때는 `SOCKETIO_CONTEXT` 도 같이 맞춰야 클라이언트 경로가 일치한다 —
@@ -86,9 +86,9 @@ Redis 에 못 붙으면 서비스는 뜨지만 상태가 하나도 남지 않는
 | 변수 | 기본 | 설명 |
 |------|------|------|
 | `SPRING_PROFILES_ACTIVE` | `dev` | `dev` \| `local` |
-| `PORT` | `3001` | REST 리슨 포트 |
+| `PORT` | `19060` | REST 리슨 포트 |
 | `CONTEXT_PATH` | `/wannassong` | 빈 값이면 루트. `SOCKETIO_CONTEXT` 도 같이 맞출 것 |
-| `SOCKETIO_PORT` | `3002` | Socket.IO 리슨 포트 |
+| `SOCKETIO_PORT` | `19061` | Socket.IO 리슨 포트 |
 | `SOCKETIO_CONTEXT` | `/wannassong/socket.io` | socket.io 는 context path 를 자동 상속하지 않는다 |
 | `PUBLIC_PORT` | `PORT` 값 | `/api/info` 의 `lanUrls`·`port`. 프록시 앞단 포트 |
 | `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` | `localhost` / `6379` / — | `local` 프로파일에서만 |
@@ -107,7 +107,7 @@ Redis 에 못 붙으면 서비스는 뜨지만 상태가 하나도 남지 않는
 
 ## Swagger
 
-기동 후 `http://localhost:3001/wannassong/swagger-ui.html`
+기동 후 `http://localhost:19060/wannassong/swagger-ui.html`
 (OpenAPI JSON 은 `/wannassong/v3/api-docs`).
 
 REST 5개만 나온다. 대기열·재생·스피커는 Socket.IO 이벤트라 OpenAPI 로 표현되지 않는다 —
@@ -124,8 +124,8 @@ netty-socketio 는 Tomcat 포트를 공유할 수 없어 리스너가 둘이다.
 하나로는 안 되고 **둘** 이 필요하다.
 
 ```nginx
-upstream afin_wannassong    { server 127.0.0.1:3001; }   # REST + Swagger
-upstream afin_wannassong_ws { server 127.0.0.1:3002; }   # Socket.IO
+upstream afin_wannassong    { server 127.0.0.1:19060; }   # REST + Swagger
+upstream afin_wannassong_ws { server 127.0.0.1:19061; }   # Socket.IO
 ```
 
 `server` 블록에:
@@ -159,7 +159,7 @@ location 순서는 무관하다. nginx 는 prefix location 중 가장 긴 것을
 
 | 빠뜨린 것 | 증상 |
 |---|---|
-| socket.io 를 3001 upstream 으로 | 404. REST 포트에는 socket.io 가 없다 |
+| socket.io 를 19060 upstream 으로 | 404. REST 포트에는 socket.io 가 없다 |
 | `Upgrade` / `Connection` 헤더 | websocket 업그레이드 실패. polling 으로만 붙어 `tick` 이 느려짐 |
 | `proxy_read_timeout` 상향 | 기본 60s 라 유휴 소켓이 끊김 → 재연결 반복, 스피커가 계속 release 됨 |
 | `X-Forwarded-For` | REST 레이트 리밋이 nginx IP 하나로 뭉쳐서 전원이 429 |

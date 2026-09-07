@@ -57,7 +57,7 @@ public class ApiController {
 	/** ponytail: IP 를 키로 한 프로세스 로컬 카운터. 단일 인스턴스라 충분하다. */
 	private final RateLimiter ipLimits = new RateLimiter();
 
-	@Value("${server.port:3001}")
+	@Value("${server.port:19060}")
 	private int serverPort;
 
 	/** 프록시 뒤면 브라우저가 보는 포트가 다르다. PUBLIC_PORT 가 있으면 그걸 알려 준다. */
