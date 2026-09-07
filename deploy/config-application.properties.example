@@ -1,4 +1,4 @@
-# 서버의 <앱 디렉토리>/config/application.properties 로 복사한다.
+# /home/mobcomms/afin/wannassong-api/config/application.properties 로 복사한다.
 # Spring Boot 가 ./config/ 를 기본 설정 위치로 읽는다 (jar 안 클래스패스보다 우선).
 # ASCII 만 쓸 것 (.properties 는 ISO-8859-1 로 읽힌다).
 wannasong.yt-api-key=AIza...

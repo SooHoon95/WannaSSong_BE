@@ -52,14 +52,13 @@ SPRING_PROFILES_ACTIVE=local ./gradlew bootRun
 ./gradlew bootJar     # build/libs/wannassong-0.0.1-SNAPSHOT.jar
 ```
 
-서버 배치:
+서버 배치 (`/home/mobcomms/afin/wannassong-api`):
 
 ```
-<앱 디렉토리>/
-├── wannassong-api.jar                 # bootJar 산출물을 이 이름으로
-├── wannassong-api.sh                  # deploy/wannassong-api.sh
-├── config/application.properties      # 시크릿. deploy/config-application.properties.example 참고
-└── output.log
+wannassong-api.jar                 # bootJar 산출물을 이 이름으로
+wannassong-api.sh                  # deploy/wannassong-api.sh
+config/application.properties      # 시크릿. deploy/config-application.properties.example 참고
+output.log
 ```
 
 `./wannassong-api.sh` 하나로 뜬다. **프로세스는 하나**고 그 안에서 두 포트를 리슨한다
@@ -77,7 +76,7 @@ socket.io listening on 0.0.0.0:19061/wannassong/socket.io
 (`/etc/logrotate.d/wannassong-api`):
 
 ```
-/home/<user>/wannassong-api/output.log {
+/home/mobcomms/afin/wannassong-api/output.log {
     daily
     rotate 14
     compress
