@@ -113,13 +113,30 @@ public class JukeboxService {
 
 	// ---------- 신청 ----------
 
-	/** 대기열에 넣는다. 중복이면 DUPLICATE. */
+	/**
+	 * 대기열에 넣는다. 검사 순서는 스펙 §4 그대로:
+	 * DUPLICATE → QUEUE_FULL → TOO_MANY_PENDING → COOLDOWN.
+	 */
 	public synchronized Item enqueue(Track track, String clientId) {
 		JukeboxState s = store.state();
 		boolean dup = (s.getNowPlaying() != null && s.getNowPlaying().getVideoId().equals(track.videoId()))
 				|| s.getQueue().stream().anyMatch(q -> q.getVideoId().equals(track.videoId()));
 		if (dup) {
 			throw new JukeboxException("DUPLICATE");
+		}
+		if (s.getQueue().size() >= props.getMaxQueue()) {
+			throw new JukeboxException("QUEUE_FULL");
+		}
+		long mine = s.getQueue().stream()
+				.filter(q -> "request".equals(q.getSource()) && q.getRequestedBy() != null
+						&& clientId.equals(q.getRequestedBy().clientId()))
+				.count();
+		if (mine >= props.getMaxPendingPerUser()) {
+			throw new JukeboxException("TOO_MANY_PENDING");
+		}
+		long remaining = cooldownRemaining(clientId);
+		if (remaining > 0) {
+			throw new JukeboxException("COOLDOWN", remaining);
 		}
 		Item item = makeItem(track, clientId, "request", "");
 		s.getQueue().add(item);
@@ -132,19 +149,6 @@ public class JukeboxService {
 			broadcast();
 		}
 		return item;
-	}
-
-	public synchronized void checkQueueLimits(String clientId) {
-		JukeboxState s = store.state();
-		if (s.getQueue().size() >= props.getMaxQueue()) {
-			throw new JukeboxException("QUEUE_FULL");
-		}
-		long mine = s.getQueue().stream()
-				.filter(q -> q.getRequestedBy() != null && clientId.equals(q.getRequestedBy().clientId()))
-				.count();
-		if (mine >= props.getMaxPendingPerUser()) {
-			throw new JukeboxException("TOO_MANY_PENDING");
-		}
 	}
 
 	/** 자기 신청곡 취소 → 쿨다운도 되돌려 준다. */
@@ -350,6 +354,12 @@ public class JukeboxService {
 			failedVideoIds.clear();
 		}
 		advance("start");
+	}
+
+	/** 외부 모니터링용 (스펙 §4 타이머 30초). */
+	@Scheduled(fixedRate = 30_000)
+	public void heartbeat() {
+		store.writeHeartbeat(speakerOnline());
 	}
 
 	/** 목록이 새로 로드되면 실패 기록을 비우고, 멈춰 있던 스피커를 다시 돌린다. */

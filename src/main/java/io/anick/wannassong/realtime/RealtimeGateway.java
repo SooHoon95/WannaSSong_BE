@@ -4,7 +4,6 @@ import java.time.Instant;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -19,7 +18,6 @@ import io.anick.wannassong.jukebox.JukeboxException;
 import io.anick.wannassong.jukebox.JukeboxService;
 import io.anick.wannassong.jukebox.StateStore;
 import io.anick.wannassong.jukebox.Track;
-import io.anick.wannassong.youtube.ItunesClient;
 import io.anick.wannassong.youtube.YouTubeClient;
 
 import org.springframework.stereotype.Component;
@@ -29,7 +27,7 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * socket.io-client v4 이벤트 처리 (server.js io.on('connection') 이식).
- * 클라→서버: identify, suggest, ytsearch, request, remove, speaker:claim/tick/ended/error/skip/release,
+ * 클라→서버: identify, request, remove, speaker:claim/tick/ended/error/skip/release,
  * fallback:set, feedback. 서버→클라: state, tick, me.
  */
 @Slf4j
@@ -53,15 +51,11 @@ public class RealtimeGateway {
 
 	private final YouTubeClient youtube;
 
-	private final ItunesClient itunes;
-
 	/** 스피커 전용 이벤트는 페이로드가 없을 수 있어 Object 로 받는다. */
 	public void register() {
 		server.addConnectListener(this::onConnect);
 		server.addDisconnectListener(this::onDisconnect);
 		on("identify", this::onIdentify);
-		on("suggest", this::onSuggest);
-		on("ytsearch", this::onYtSearch);
 		on("request", this::onRequest);
 		on("remove", this::onRemove);
 		on("speaker:claim", this::onSpeakerClaim);
@@ -85,7 +79,13 @@ public class RealtimeGateway {
 				listener.onData(client, data == null ? Map.of() : (Map<String, Object>) data, ack);
 			}
 			catch (JukeboxException e) {
-				sendAck(ack, Map.of("ok", false, "error", errMsg(e.getMessage())));
+				Map<String, Object> err = new LinkedHashMap<>();
+				err.put("ok", false);
+				err.put("error", errMsg(e.getMessage()));
+				if (e.getCooldownRemainingMs() > 0) {
+					err.put("cooldownRemainingMs", e.getCooldownRemainingMs());
+				}
+				sendAck(ack, err);
 			}
 			catch (Exception e) {
 				log.warn("[{}] 처리 실패: {}", event, e.toString());
@@ -110,7 +110,7 @@ public class RealtimeGateway {
 		jukebox.releaseSpeaker(client);
 	}
 
-	// ---------- 신원·검색 ----------
+	// ---------- 신원 ----------
 
 	private void onIdentify(SocketIOClient client, Map<String, Object> p, AckRequest ack) {
 		if (!limit(client, "identify", 20, 60_000)) {
@@ -128,37 +128,13 @@ public class RealtimeGateway {
 		jukebox.sendState(client); // connect 직후 state 를 놓쳤을 경우의 보정
 	}
 
-	/** 1단계: iTunes 후보 (무료·무제한). */
-	private void onSuggest(SocketIOClient client, Map<String, Object> p, AckRequest ack) {
-		requireAuth(client);
-		requireLimit(client, "suggest", 40, 60_000);
-		String term = str(p.get("q"), 100).trim();
-		List<?> results = term.isEmpty() ? List.of() : itunes.search(term, 8);
-		sendAck(ack, Map.of("ok", true, "results", results));
-	}
-
-	/** YouTube 직접 검색 (100유닛/회라 빡빡하게). */
-	private void onYtSearch(SocketIOClient client, Map<String, Object> p, AckRequest ack) {
-		requireAuth(client);
-		requireLimit(client, "ytsearch", 5, 60_000);
-		String term = str(p.get("q"), 100).trim();
-		List<Track> results = term.isEmpty() ? List.of() : youtube.search(term, 5);
-		sendAck(ack, Map.of("ok", true, "results", results));
-	}
-
-	/** 신청. kind: itunes {artist,title} | url {url} | video {videoId,title,author,thumb} */
+	/** 신청. kind: itunes {artist,title} | video {videoId,title,author,thumb}. url 탭은 스코프 밖. */
 	private void onRequest(SocketIOClient client, Map<String, Object> p, AckRequest ack) {
 		requireAuth(client);
 		requireLimit(client, "request", 10, 60_000);
 		String clientId = clientId(client);
 		if (clientId.isEmpty()) {
 			throw new JukeboxException("AUTH_REQUIRED");
-		}
-		jukebox.checkQueueLimits(clientId);
-		long remaining = jukebox.cooldownRemaining(clientId);
-		if (remaining > 0) {
-			sendAck(ack, Map.of("ok", false, "error", errMsg("COOLDOWN"), "cooldownRemainingMs", remaining));
-			return;
 		}
 		Track track = resolveRequest(p);
 		Item item = jukebox.enqueue(track, clientId);
@@ -172,23 +148,20 @@ public class RealtimeGateway {
 	private Track resolveRequest(Map<String, Object> p) {
 		String kind = str(p.get("kind"), 20);
 		switch (kind) {
-			case "url" -> {
-				String videoId = youtube.parseVideoId(str(p.get("url"), 500));
-				if (videoId == null) {
-					throw new JukeboxException("BAD_URL");
-				}
-				Track track = youtube.oembed(videoId);
-				if (track == null) {
-					throw new JukeboxException("UNAVAILABLE");
-				}
-				return track;
-			}
 			case "video" -> {
+				// 프론트 ytsearch 결과의 videoId 재사용 — YouTube search 를 다시 부르지 않는다.
 				String videoId = youtube.parseVideoId(str(p.get("videoId"), 100));
 				if (videoId == null) {
 					throw new JukeboxException("BAD_URL");
 				}
-				return Track.of(videoId, str(p.get("title"), 200), str(p.get("author"), 100), str(p.get("thumb"), 500));
+				String title = str(p.get("title"), 200);
+				if (title.isBlank()) {
+					Track meta = youtube.oembed(videoId); // 메타가 비었을 때만 보강
+					if (meta != null) {
+						return meta;
+					}
+				}
+				return Track.of(videoId, title, str(p.get("author"), 100), str(p.get("thumb"), 500));
 			}
 			case "itunes" -> {
 				return jukebox.cachedYouTubeSearch(str(p.get("artist"), 200), str(p.get("title"), 200));

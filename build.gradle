@@ -19,17 +19,23 @@ repositories {
 
 dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-web'
+	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+	implementation 'org.apache.commons:commons-pool2'
 	implementation 'com.corundumstudio.socketio:netty-socketio:2.0.14'
 	compileOnly 'org.projectlombok:lombok'
 	annotationProcessor 'org.projectlombok:lombok'
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testImplementation 'io.socket:socket.io-client:2.1.2'
+	testImplementation 'com.github.codemonstur:embedded-redis:1.4.3'
 	testCompileOnly 'org.projectlombok:lombok'
 	testAnnotationProcessor 'org.projectlombok:lombok'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 tasks.named('test') {
+	systemProperty 'spring.profiles.active', 'test'
+	// ./config/ 의 로컬 시크릿은 클래스패스보다 우선이라 테스트가 실제 YouTube API 를 때린다. 쿼터 보호.
+	systemProperty 'wannasong.yt-api-key', ''
 	useJUnitPlatform()
 }
 

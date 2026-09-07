@@ -29,6 +29,8 @@ public class YouTubeClient {
 	private static final Pattern IN_URL = Pattern.compile(
 			"(?:youtu\\.be/|/shorts/|/embed/|/live/|[?&]v=)([A-Za-z0-9_-]{11})");
 
+	private static final Pattern ENTITY = Pattern.compile("&(#[xX]?[0-9A-Fa-f]+|[a-zA-Z]+);");
+
 	private final WannaSongProperties props;
 
 	private final RestClient http = RestClient.create();
@@ -73,11 +75,11 @@ public class YouTubeClient {
 		}
 	}
 
-	/** search.list 1회 = 100유닛. */
+	/** search.list 1회 = 100유닛. videoCategoryId=10 은 Music. */
 	public List<Track> search(String query, int max) {
 		requireKey();
-		JsonNode j = get("search?part=snippet&type=video&videoEmbeddable=true&maxResults=" + Math.min(max, 50)
-				+ "&q=" + enc(query));
+		JsonNode j = get("search?part=snippet&type=video&videoCategoryId=10&videoEmbeddable=true&maxResults="
+				+ Math.min(max, 50) + "&q=" + enc(query));
 		List<Track> out = new ArrayList<>();
 		for (JsonNode it : j.path("items")) {
 			String id = it.path("id").path("videoId").asText("");
@@ -129,7 +131,45 @@ public class YouTubeClient {
 	private Track track(String videoId, JsonNode snippet) {
 		JsonNode thumbs = snippet.path("thumbnails");
 		String thumb = thumbs.path("high").path("url").asText(thumbs.path("default").path("url").asText(""));
-		return Track.of(videoId, snippet.path("title").asText(videoId), snippet.path("channelTitle").asText(""), thumb);
+		return Track.of(videoId, decode(snippet.path("title").asText(videoId)),
+				decode(snippet.path("channelTitle").asText("")), thumb);
+	}
+
+	/**
+	 * Data API 는 제목을 HTML 이스케이프해서 준다 ("Rock &amp; Roll").
+	 * ponytail: YouTube 가 쓰는 5개 + 숫자 참조만 푼다. 전체 엔티티 표가 필요하면 commons-text 로 교체.
+	 */
+	static String decode(String s) {
+		if (s == null || s.indexOf('&') < 0) {
+			return s;
+		}
+		StringBuilder out = new StringBuilder(s.length());
+		Matcher m = ENTITY.matcher(s);
+		int last = 0;
+		while (m.find()) {
+			out.append(s, last, m.start());
+			String name = m.group(1);
+			switch (name) {
+				case "amp" -> out.append('&');
+				case "lt" -> out.append('<');
+				case "gt" -> out.append('>');
+				case "quot" -> out.append('"');
+				case "apos" -> out.append('\'');
+				case "nbsp" -> out.append(' ');
+				default -> {
+					if (name.startsWith("#")) {
+						String digits = name.substring(1);
+						int radix = digits.startsWith("x") || digits.startsWith("X") ? 16 : 10;
+						out.appendCodePoint(Integer.parseInt(radix == 16 ? digits.substring(1) : digits, radix));
+					}
+					else {
+						out.append(m.group());
+					}
+				}
+			}
+			last = m.end();
+		}
+		return out.append(s, last, s.length()).toString();
 	}
 
 	private JsonNode get(String pathAndQuery) {

@@ -27,6 +27,6 @@ public class SocketIoLifecycle {
 	public void start() {
 		gateway.register();
 		server.start();
-		log.info("socket.io listening on {}:{}", props.getHostname(), props.getPort());
+		log.info("socket.io listening on {}:{}{}", props.getHostname(), props.getPort(), props.getContext());
 	}
 }

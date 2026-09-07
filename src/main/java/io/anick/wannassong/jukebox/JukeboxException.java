@@ -2,11 +2,23 @@ package io.anick.wannassong.jukebox;
 
 import java.util.Map;
 
-/** ERR_MSG 코드를 던지는 예외. 메시지 표는 Node ERR_MSG 와 1:1. */
+/** ERR_MSG 코드를 던지는 예외. 메시지 표는 스펙 §6 과 1:1. */
 public class JukeboxException extends RuntimeException {
 
+	/** COOLDOWN 일 때만 0 보다 크다 (ack 의 cooldownRemainingMs). */
+	private final long cooldownRemainingMs;
+
 	public JukeboxException(String code) {
+		this(code, 0);
+	}
+
+	public JukeboxException(String code, long cooldownRemainingMs) {
 		super(code);
+		this.cooldownRemainingMs = cooldownRemainingMs;
+	}
+
+	public long getCooldownRemainingMs() {
+		return cooldownRemainingMs;
 	}
 
 	public static String message(String code, int maxPendingPerUser) {
@@ -27,4 +39,5 @@ public class JukeboxException extends RuntimeException {
 		String m = msg.get(code);
 		return m != null ? m : "처리 중 오류가 났습니다. 다시 시도해 주세요.";
 	}
+
 }

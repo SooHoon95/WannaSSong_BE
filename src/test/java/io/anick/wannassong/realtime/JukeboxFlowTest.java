@@ -21,11 +21,16 @@ import org.springframework.test.context.TestPropertySource;
 @SpringBootTest
 @TestPropertySource(properties = {
 		"socketio.port=39311",
+		"spring.data.redis.database=1",
 		"wannasong.access-code=secret",
 		"wannasong.speaker-key=spk",
 		"wannasong.cooldown-sec=0",
 		"wannasong.data-dir=build/test-data" })
 class JukeboxFlowTest {
+
+	static {
+		io.anick.wannassong.EmbeddedRedis.ensureRunning();
+	}
 
 	private static final String VIDEO_ID = "dQw4w9WgXcQ";
 

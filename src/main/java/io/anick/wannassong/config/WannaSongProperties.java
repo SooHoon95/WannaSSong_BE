@@ -1,5 +1,7 @@
 package io.anick.wannassong.config;
 
+import java.util.List;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import lombok.Getter;
@@ -31,6 +33,12 @@ public class WannaSongProperties {
 
 	/** QR·공유용 외부 주소. */
 	private String publicUrl = "";
+
+	/** /api/info 가 알려 줄 외부 공개 포트. 비우면 server.port 를 쓴다. */
+	private Integer publicPort;
+
+	/** 브라우저가 붙어오는 Origin 목록. REST CORS 와 socket.io 양쪽에 쓴다. */
+	private List<String> allowedOrigins = List.of("*");
 
 	private String version = "0.0.1";
 

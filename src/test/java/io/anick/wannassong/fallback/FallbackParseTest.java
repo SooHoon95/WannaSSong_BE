@@ -11,8 +11,12 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.TestPropertySource;
 
 @SpringBootTest
-@TestPropertySource(properties = { "socketio.port=39312", "wannasong.data-dir=build/test-data" })
+@TestPropertySource(properties = { "socketio.port=39312", "spring.data.redis.database=2" })
 class FallbackParseTest {
+
+	static {
+		io.anick.wannassong.EmbeddedRedis.ensureRunning();
+	}
 
 	@Autowired
 	FallbackService fallback;
