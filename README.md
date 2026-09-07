@@ -8,15 +8,14 @@ WannaSSong 온프레미스 백엔드. REST + Socket.IO + Redis + 폴백 로드�
 
 | 프로파일 | 파일 | Redis |
 |---|---|---|
-| `local` (기본) | `application-local.properties` | 단독 `localhost:6379` |
-| `dev` | `application-dev.properties` | 개발서버 클러스터 `10.251.1.181:7000-7009` |
+| `dev` (기본) | `application-dev.properties` | 개발서버 클러스터 `10.251.1.181:7000-7009` |
+| `local` | `application-local.properties` | 단독 `localhost:6379` (Docker) |
 | `test` | `src/test/resources/application-test.properties` | `EmbeddedRedis` 자동 기동 (`localhost:6399`) |
 
 공통 설정은 `application.properties`. 클러스터는 `SELECT` 를 지원하지 않아 DB 인덱스 분리가 안 되고, `wannasong:` 키 프리픽스로만 구분한다.
 
-로컬에 Redis 를 안 띄울 거면 `dev` 프로파일을 쓴다. IntelliJ 는
-Run → Edit Configurations → **Active profiles** 에 `dev`. 안 넣으면 `local` 로 떠서
-`Unable to connect to Redis` 가 난다.
+프로파일을 지정하지 않으면 `dev` 로 뜬다 (`spring.profiles.default=dev`). IntelliJ 에서
+그냥 Run 해도 개발서버 Redis 에 붙는다. 오프라인으로 작업할 때만 `local` 을 켠다.
 
 > **`.properties` 는 ASCII 만 쓴다.** Spring 은 `.properties` 를 ISO-8859-1 로 읽는다
 > (`java.util.Properties` 스펙). 한글을 넣으면 `# ê°ë° ìë²` 처럼 깨진다.
@@ -40,11 +39,11 @@ Run → Edit Configurations → **Active profiles** 에 `dev`. 안 넣으면 `lo
 
 ## 실행
 
-로컬:
+로컬 (오프라인, `local` 프로파일):
 
 ```bash
 docker run -d --name wannasong-redis -p 6379:6379 redis:7-alpine
-./gradlew bootRun
+SPRING_PROFILES_ACTIVE=local ./gradlew bootRun
 ```
 
 개발서버 (jar):
@@ -77,7 +76,7 @@ Redis 에 못 붙으면 서비스는 뜨지만 상태가 하나도 남지 않는
 
 | 변수 | 기본 | 설명 |
 |------|------|------|
-| `SPRING_PROFILES_ACTIVE` | `local` | `local` \| `dev` |
+| `SPRING_PROFILES_ACTIVE` | `dev` | `dev` \| `local` |
 | `PORT` | `3001` | REST 리슨 포트 |
 | `CONTEXT_PATH` | — (루트) | 예: `/jukebox` → `/jukebox/api/*` |
 | `SOCKETIO_PORT` | `3002` | Socket.IO 리슨 포트 |
